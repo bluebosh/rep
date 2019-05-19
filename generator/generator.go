@@ -2,6 +2,7 @@
 package generator
 
 import (
+	"context"
 	"fmt"
 
 	"code.cloudfoundry.org/bbs"
@@ -21,7 +22,7 @@ import (
 // Generator encapsulates operation creation in the Rep.
 type Generator interface {
 	// BatchOperations creates a set of operations across all containers the Rep is managing.
-	BatchOperations(lager.Logger) (map[string]operationq.Operation, error)
+	BatchOperations(context.Context, lager.Logger) (map[string]operationq.Operation, error)
 
 	// OperationStream creates an operation every time a container lifecycle event is observed.
 	OperationStream(lager.Logger) (<-chan operationq.Operation, error)
@@ -58,7 +59,7 @@ func New(
 	}
 }
 
-func (g *generator) BatchOperations(logger lager.Logger) (map[string]operationq.Operation, error) {
+func (g *generator) BatchOperations(ctx context.Context, logger lager.Logger) (map[string]operationq.Operation, error) {
 	logger = logger.Session("batch-operations")
 	logger.Info("started")
 
@@ -86,7 +87,7 @@ func (g *generator) BatchOperations(logger lager.Logger) (map[string]operationq.
 
 	go func() {
 		filter := models.ActualLRPFilter{CellID: g.cellID}
-		groups, err := g.bbs.ActualLRPGroups(logger, filter)
+		groups, err := g.bbs.ActualLRPGroups(ctx, logger, filter)
 		if err != nil {
 			logger.Error("failed-to-retrieve-lrp-groups", err)
 			err = fmt.Errorf("failed to retrieve lrps: %s", err.Error())
@@ -104,7 +105,7 @@ func (g *generator) BatchOperations(logger lager.Logger) (map[string]operationq.
 	}()
 
 	go func() {
-		foundTasks, err := g.bbs.TasksByCellID(logger, g.cellID)
+		foundTasks, err := g.bbs.TasksByCellID(ctx, logger, g.cellID)
 		if err != nil {
 			logger.Error("failed-to-retrieve-tasks", err)
 			err = fmt.Errorf("failed to retrieve tasks: %s", err.Error())

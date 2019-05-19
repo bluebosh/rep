@@ -1,6 +1,8 @@
 package internal
 
 import (
+	"context"
+
 	"code.cloudfoundry.org/bbs"
 	"code.cloudfoundry.org/bbs/models"
 	loggingclient "code.cloudfoundry.org/diego-logging-client"
@@ -26,7 +28,7 @@ func newLRPContainer(lrpKey *models.ActualLRPKey, instanceKey *models.ActualLRPI
 //go:generate counterfeiter -o fake_internal/fake_lrp_processor.go lrp_processor.go LRPProcessor
 
 type LRPProcessor interface {
-	Process(lager.Logger, executor.Container)
+	Process(context.Context, lager.Logger, executor.Container)
 }
 
 type lrpProcessor struct {
@@ -52,10 +54,10 @@ func NewLRPProcessor(
 	}
 }
 
-func (p *lrpProcessor) Process(logger lager.Logger, container executor.Container) {
+func (p *lrpProcessor) Process(ctx context.Context, logger lager.Logger, container executor.Container) {
 	if p.evacuationReporter.Evacuating() {
-		p.evacuationProcessor.Process(logger, container)
+		p.evacuationProcessor.Process(ctx, logger, container)
 	} else {
-		p.ordinaryProcessor.Process(logger, container)
+		p.ordinaryProcessor.Process(ctx, logger, container)
 	}
 }

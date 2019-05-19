@@ -1,6 +1,7 @@
 package harmonizer
 
 import (
+	"context"
 	"os"
 	"time"
 
@@ -81,12 +82,12 @@ func (b *Bulker) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
 			return nil
 		}
 
-		b.sync(logger)
+		b.sync(nil, logger)
 		timer.Reset(interval)
 	}
 }
 
-func (b *Bulker) sync(logger lager.Logger) {
+func (b *Bulker) sync(ctx context.Context, logger lager.Logger) {
 	logger = logger.Session("sync")
 
 	logger.Info("starting")
@@ -94,7 +95,7 @@ func (b *Bulker) sync(logger lager.Logger) {
 
 	startTime := b.clock.Now()
 
-	ops, batchError := b.generator.BatchOperations(logger)
+	ops, batchError := b.generator.BatchOperations(ctx, logger)
 
 	endTime := b.clock.Now()
 

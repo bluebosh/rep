@@ -1,6 +1,7 @@
 package generator
 
 import (
+	"context"
 	"fmt"
 
 	"code.cloudfoundry.org/bbs"
@@ -38,7 +39,7 @@ func (o *ResidualInstanceLRPOperation) Key() string {
 	return o.GetInstanceGuid()
 }
 
-func (o *ResidualInstanceLRPOperation) Execute() {
+func (o *ResidualInstanceLRPOperation) Execute(ctx context.Context) {
 	logger := o.logger.Session("executing-residual-instance-lrp-operation", lager.Data{
 		"lrp-key":          o.ActualLRPKey,
 		"lrp-instance-key": o.ActualLRPInstanceKey,
@@ -52,7 +53,7 @@ func (o *ResidualInstanceLRPOperation) Execute() {
 		return
 	}
 
-	o.bbsClient.RemoveActualLRP(logger, &o.ActualLRPKey, &models.ActualLRPInstanceKey{
+	o.bbsClient.RemoveActualLRP(ctx, logger, &o.ActualLRPKey, &models.ActualLRPInstanceKey{
 		InstanceGuid: o.InstanceGuid,
 		CellId:       o.CellId,
 	})
@@ -86,7 +87,7 @@ func (o *ResidualEvacuatingLRPOperation) Key() string {
 	return o.GetInstanceGuid()
 }
 
-func (o *ResidualEvacuatingLRPOperation) Execute() {
+func (o *ResidualEvacuatingLRPOperation) Execute(ctx context.Context) {
 	logger := o.logger.Session("executing-residual-evacuating-lrp-operation", lager.Data{
 		"lrp-key":          o.ActualLRPKey,
 		"lrp-instance-key": o.ActualLRPInstanceKey,
@@ -100,7 +101,7 @@ func (o *ResidualEvacuatingLRPOperation) Execute() {
 		return
 	}
 
-	o.bbsClient.RemoveEvacuatingActualLRP(logger, &o.ActualLRPKey, &o.ActualLRPInstanceKey)
+	o.bbsClient.RemoveEvacuatingActualLRP(ctx, logger, &o.ActualLRPKey, &o.ActualLRPInstanceKey)
 }
 
 // ResidualJointLRPOperation processes an evacuating ActualLRP with no matching container.
@@ -131,7 +132,7 @@ func (o *ResidualJointLRPOperation) Key() string {
 	return o.GetInstanceGuid()
 }
 
-func (o *ResidualJointLRPOperation) Execute() {
+func (o *ResidualJointLRPOperation) Execute(ctx context.Context) {
 	logger := o.logger.Session("executing-residual-joint-lrp-operation", lager.Data{
 		"lrp-key":          o.ActualLRPKey,
 		"lrp-instance-key": o.ActualLRPInstanceKey,
@@ -147,8 +148,8 @@ func (o *ResidualJointLRPOperation) Execute() {
 
 	actualLRPKey := models.NewActualLRPKey(o.ProcessGuid, int32(o.Index), o.Domain)
 	actualLRPInstanceKey := models.NewActualLRPInstanceKey(o.InstanceGuid, o.CellId)
-	o.bbsClient.RemoveActualLRP(logger, &o.ActualLRPKey, &o.ActualLRPInstanceKey)
-	o.bbsClient.RemoveEvacuatingActualLRP(logger, &actualLRPKey, &actualLRPInstanceKey)
+	o.bbsClient.RemoveActualLRP(ctx, logger, &o.ActualLRPKey, &o.ActualLRPInstanceKey)
+	o.bbsClient.RemoveEvacuatingActualLRP(ctx, logger, &actualLRPKey, &actualLRPInstanceKey)
 }
 
 // ResidualTaskOperation processes a Task with no matching container.
@@ -180,7 +181,7 @@ func (o *ResidualTaskOperation) Key() string {
 	return o.TaskGuid
 }
 
-func (o *ResidualTaskOperation) Execute() {
+func (o *ResidualTaskOperation) Execute(ctx context.Context) {
 	logger := o.logger.Session("executing-residual-task-operation", lager.Data{
 		"task-guid": o.TaskGuid,
 	})
@@ -193,7 +194,7 @@ func (o *ResidualTaskOperation) Execute() {
 		return
 	}
 
-	err := o.bbsClient.CompleteTask(logger, o.TaskGuid, o.CellId, true, internal.TaskCompletionReasonMissingContainer, internal.TaskCompletionReasonMissingContainer)
+	err := o.bbsClient.CompleteTask(ctx, logger, o.TaskGuid, o.CellId, true, internal.TaskCompletionReasonMissingContainer, internal.TaskCompletionReasonMissingContainer)
 	if err != nil {
 		logger.Error("failed-to-complete-task", err)
 	}
@@ -229,7 +230,7 @@ func (o *ContainerOperation) Key() string {
 	return o.Guid
 }
 
-func (o *ContainerOperation) Execute() {
+func (o *ContainerOperation) Execute(ctx context.Context) {
 	logger := o.logger.Session("executing-container-operation", lager.Data{
 		"container-guid": o.Guid,
 	})
@@ -250,11 +251,11 @@ func (o *ContainerOperation) Execute() {
 
 	switch lifecycle {
 	case rep.LRPLifecycle:
-		o.lrpProcessor.Process(logger, container)
+		o.lrpProcessor.Process(ctx, logger, container)
 		return
 
 	case rep.TaskLifecycle:
-		o.taskProcessor.Process(logger, container)
+		o.taskProcessor.Process(ctx, logger, container)
 		return
 
 	default:

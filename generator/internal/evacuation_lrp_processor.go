@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"fmt"
 	"sync"
 
@@ -31,7 +32,7 @@ func newEvacuationLRPProcessor(bbsClient bbs.InternalClient, containerDelegate C
 	}
 }
 
-func (p *evacuationLRPProcessor) Process(logger lager.Logger, container executor.Container) {
+func (p *evacuationLRPProcessor) Process(ctx context.Context, logger lager.Logger, container executor.Container) {
 	logger = logger.Session("evacuation-lrp-processor", lager.Data{
 		"container-guid":  container.Guid,
 		"container-state": container.State,
@@ -61,36 +62,36 @@ func (p *evacuationLRPProcessor) Process(logger lager.Logger, container executor
 
 	switch lrpContainer.Container.State {
 	case executor.StateReserved:
-		p.processReservedContainer(logger, lrpContainer)
+		p.processReservedContainer(ctx, logger, lrpContainer)
 	case executor.StateInitializing:
-		p.processInitializingContainer(logger, lrpContainer)
+		p.processInitializingContainer(ctx, logger, lrpContainer)
 	case executor.StateCreated:
-		p.processCreatedContainer(logger, lrpContainer)
+		p.processCreatedContainer(ctx, logger, lrpContainer)
 	case executor.StateRunning:
-		p.processRunningContainer(logger, lrpContainer, streamer)
+		p.processRunningContainer(ctx, logger, lrpContainer, streamer)
 	case executor.StateCompleted:
-		p.processCompletedContainer(logger, lrpContainer)
+		p.processCompletedContainer(ctx, logger, lrpContainer)
 	default:
 		p.processInvalidContainer(logger, lrpContainer)
 	}
 }
 
-func (p *evacuationLRPProcessor) processReservedContainer(logger lager.Logger, lrpContainer *lrpContainer) {
+func (p *evacuationLRPProcessor) processReservedContainer(ctx context.Context, logger lager.Logger, lrpContainer *lrpContainer) {
 	logger = logger.Session("process-reserved-container")
-	p.evacuateClaimedLRPContainer(logger, lrpContainer)
+	p.evacuateClaimedLRPContainer(ctx, logger, lrpContainer)
 }
 
-func (p *evacuationLRPProcessor) processInitializingContainer(logger lager.Logger, lrpContainer *lrpContainer) {
+func (p *evacuationLRPProcessor) processInitializingContainer(ctx context.Context, logger lager.Logger, lrpContainer *lrpContainer) {
 	logger = logger.Session("process-initializing-container")
-	p.evacuateClaimedLRPContainer(logger, lrpContainer)
+	p.evacuateClaimedLRPContainer(ctx, logger, lrpContainer)
 }
 
-func (p *evacuationLRPProcessor) processCreatedContainer(logger lager.Logger, lrpContainer *lrpContainer) {
+func (p *evacuationLRPProcessor) processCreatedContainer(ctx context.Context, logger lager.Logger, lrpContainer *lrpContainer) {
 	logger = logger.Session("process-created-container")
-	p.evacuateClaimedLRPContainer(logger, lrpContainer)
+	p.evacuateClaimedLRPContainer(ctx, logger, lrpContainer)
 }
 
-func (p *evacuationLRPProcessor) processRunningContainer(logger lager.Logger, lrpContainer *lrpContainer, streamer log_streamer.LogStreamer) {
+func (p *evacuationLRPProcessor) processRunningContainer(ctx context.Context, logger lager.Logger, lrpContainer *lrpContainer, streamer log_streamer.LogStreamer) {
 	logger = logger.Session("process-running-container")
 
 	logger.Debug("extracting-net-info-from-container")
@@ -106,7 +107,7 @@ func (p *evacuationLRPProcessor) processRunningContainer(logger lager.Logger, lr
 	}
 
 	logger.Info("bbs-evacuate-running-actual-lrp", lager.Data{"net_info": netInfo})
-	keepContainer, err := p.bbsClient.EvacuateRunningActualLRP(logger, lrpContainer.ActualLRPKey, lrpContainer.ActualLRPInstanceKey, netInfo, p.evacuationTTLInSeconds)
+	keepContainer, err := p.bbsClient.EvacuateRunningActualLRP(ctx, logger, lrpContainer.ActualLRPKey, lrpContainer.ActualLRPInstanceKey, netInfo, p.evacuationTTLInSeconds)
 	if keepContainer == false {
 		p.containerDelegate.DeleteContainer(logger, lrpContainer.Container.Guid)
 	} else if err != nil {
@@ -114,16 +115,16 @@ func (p *evacuationLRPProcessor) processRunningContainer(logger lager.Logger, lr
 	}
 }
 
-func (p *evacuationLRPProcessor) processCompletedContainer(logger lager.Logger, lrpContainer *lrpContainer) {
+func (p *evacuationLRPProcessor) processCompletedContainer(ctx context.Context, logger lager.Logger, lrpContainer *lrpContainer) {
 	logger = logger.Session("process-completed-container")
 
 	if lrpContainer.RunResult.Stopped {
-		_, err := p.bbsClient.EvacuateStoppedActualLRP(logger, lrpContainer.ActualLRPKey, lrpContainer.ActualLRPInstanceKey)
+		_, err := p.bbsClient.EvacuateStoppedActualLRP(ctx, logger, lrpContainer.ActualLRPKey, lrpContainer.ActualLRPInstanceKey)
 		if err != nil {
 			logger.Error("failed-to-evacuate-stopped-actual-lrp", err, lager.Data{"lrp-key": lrpContainer.ActualLRPKey})
 		}
 	} else {
-		_, err := p.bbsClient.EvacuateCrashedActualLRP(logger, lrpContainer.ActualLRPKey, lrpContainer.ActualLRPInstanceKey, lrpContainer.RunResult.FailureReason)
+		_, err := p.bbsClient.EvacuateCrashedActualLRP(ctx, logger, lrpContainer.ActualLRPKey, lrpContainer.ActualLRPInstanceKey, lrpContainer.RunResult.FailureReason)
 		if err != nil {
 			logger.Error("failed-to-evacuate-crashed-actual-lrp", err, lager.Data{"lrp-key": lrpContainer.ActualLRPKey})
 		}
@@ -137,8 +138,8 @@ func (p *evacuationLRPProcessor) processInvalidContainer(logger lager.Logger, lr
 	logger.Error("not-processing-container-in-invalid-state", nil)
 }
 
-func (p *evacuationLRPProcessor) evacuateClaimedLRPContainer(logger lager.Logger, lrpContainer *lrpContainer) {
-	_, err := p.bbsClient.EvacuateClaimedActualLRP(logger, lrpContainer.ActualLRPKey, lrpContainer.ActualLRPInstanceKey)
+func (p *evacuationLRPProcessor) evacuateClaimedLRPContainer(ctx context.Context, logger lager.Logger, lrpContainer *lrpContainer) {
+	_, err := p.bbsClient.EvacuateClaimedActualLRP(ctx, logger, lrpContainer.ActualLRPKey, lrpContainer.ActualLRPInstanceKey)
 	if err != nil {
 		logger.Error("failed-to-unclaim-actual-lrp", err, lager.Data{"lrp-key": lrpContainer.ActualLRPKey})
 	}
