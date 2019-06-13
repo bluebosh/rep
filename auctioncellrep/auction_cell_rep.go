@@ -1,6 +1,7 @@
 package auctioncellrep
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -18,7 +19,7 @@ import (
 
 type AuctionCellClient interface {
 	State(logger lager.Logger) (rep.CellState, bool, error)
-	Perform(logger lager.Logger, work rep.Work) (rep.Work, error)
+	Perform(ctx context.Context, logger lager.Logger, work rep.Work) (rep.Work, error)
 	Reset() error
 }
 
@@ -65,14 +66,14 @@ func New(
 		stackPathMap:             preloadedStackPathMap,
 		rootFSProviders:          rootFSProviders(preloadedStackPathMap, arbitraryRootFSes),
 		containerMetricsProvider: containerMetricsProvider,
-		zone:                  zone,
-		generateInstanceGuid:  generateInstanceGuid,
-		client:                client,
-		evacuationReporter:    evacuationReporter,
-		placementTags:         placementTags,
-		optionalPlacementTags: optionalPlacementTags,
-		proxyMemoryAllocation: proxyMemoryAllocation,
-		enableContainerProxy:  enableContainerProxy,
+		zone:                     zone,
+		generateInstanceGuid:     generateInstanceGuid,
+		client:                   client,
+		evacuationReporter:       evacuationReporter,
+		placementTags:            placementTags,
+		optionalPlacementTags:    optionalPlacementTags,
+		proxyMemoryAllocation:    proxyMemoryAllocation,
+		enableContainerProxy:     enableContainerProxy,
 	}
 }
 
@@ -344,7 +345,7 @@ func containerIsStarting(container *executor.Container) bool {
 		container.State == executor.StateCreated
 }
 
-func (a *AuctionCellRep) Perform(logger lager.Logger, work rep.Work) (rep.Work, error) {
+func (a *AuctionCellRep) Perform(ctx context.Context, logger lager.Logger, work rep.Work) (rep.Work, error) {
 	var failedWork = rep.Work{}
 
 	logger = logger.Session("auction-work", lager.Data{

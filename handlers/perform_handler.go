@@ -7,6 +7,8 @@ import (
 	"code.cloudfoundry.org/lager"
 	"code.cloudfoundry.org/rep"
 	"code.cloudfoundry.org/rep/auctioncellrep"
+
+	opentracing "github.com/opentracing/opentracing-go"
 )
 
 type perform struct {
@@ -15,6 +17,11 @@ type perform struct {
 
 func (h *perform) ServeHTTP(w http.ResponseWriter, r *http.Request, logger lager.Logger) {
 	logger = logger.Session("auction-perform-work")
+
+	span := opentracing.GlobalTracer().StartSpan("rep.Perform")
+	defer span.Finish()
+	ctx := opentracing.ContextWithSpan(r.Context(), span)
+
 	var work rep.Work
 	err := json.NewDecoder(r.Body).Decode(&work)
 
@@ -24,7 +31,7 @@ func (h *perform) ServeHTTP(w http.ResponseWriter, r *http.Request, logger lager
 		return
 	}
 
-	failedWork, err := h.rep.Perform(logger, work)
+	failedWork, err := h.rep.Perform(ctx, logger, work)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		logger.Error("failed-to-perform-work", err)
